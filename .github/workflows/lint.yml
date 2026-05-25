@@ -1,0 +1,63 @@
+name: Lint
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  style:
+    name: Style compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for em dashes
+        run: |
+          if grep -rn $'—' agents/ skills/ rules/ commands/ docs/ README.md CLAUDE.md CONTRIBUTING.md 2>/dev/null; then
+            echo "ERROR: Em dashes found. Replace with '--' or restructure the sentence."
+            exit 1
+          fi
+          echo "No em dashes found."
+
+      - name: Validate plugin.json
+        run: |
+          node -e "
+            const fs = require('fs');
+            const manifest = JSON.parse(fs.readFileSync('.claude-plugin/plugin.json', 'utf8'));
+            const required = ['name', 'version', 'description', 'author', 'license', 'skills', 'commands'];
+            for (const field of required) {
+              if (!manifest[field]) { console.error('Missing field: ' + field); process.exit(1); }
+            }
+            if (!Array.isArray(manifest.skills)) { console.error('skills must be an array'); process.exit(1); }
+            if (!Array.isArray(manifest.commands)) { console.error('commands must be an array'); process.exit(1); }
+            if (manifest.agents !== undefined) { console.error('agents field must not be present; agents are auto-discovered'); process.exit(1); }
+            if (manifest.hooks !== undefined) { console.error('hooks field must not be present; hooks are auto-loaded'); process.exit(1); }
+            console.log('plugin.json valid');
+          "
+
+      - name: Validate SKILL.md frontmatter
+        run: |
+          for skill_dir in skills/*/; do
+            skill_file="${skill_dir}SKILL.md"
+            if [ ! -f "$skill_file" ]; then
+              echo "ERROR: Missing SKILL.md in $skill_dir"
+              exit 1
+            fi
+          done
+          echo "All skill directories contain SKILL.md"
+
+      - name: Check component count
+        run: |
+          agent_count=$(find agents/ -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+          skill_count=$(find skills/ -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+          rule_count=$(find rules/ -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+          command_count=$(find commands/ -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+          total=$((agent_count + skill_count + rule_count + command_count))
+          echo "Agents: $agent_count, Skills: $skill_count, Rules: $rule_count, Commands: $command_count, Total: $total"
+          if [ "$total" -gt 15 ]; then
+            echo "ERROR: Component count ($total) exceeds the v0.1 hard cap of 15."
+            exit 1
+          fi
+          echo "Component count within cap."

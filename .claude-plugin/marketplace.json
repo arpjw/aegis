@@ -1,0 +1,47 @@
+{
+  "name": "aegis",
+  "owner": {
+    "name": "Arya Somu",
+    "email": "arya@monolithsystematic.com"
+  },
+  "metadata": {
+    "description": "Smart contract and onchain development pack for Claude Code. Solidity review, audit orchestration, gas optimization, and DeFi economic review."
+  },
+  "plugins": [
+    {
+      "name": "aegis",
+      "source": "./",
+      "description": "Encoded discipline for onchain development. Four agents, seven skills, two rules, and two commands covering Solidity review, audit orchestration, gas profiling, and DeFi economic analysis.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Arya Somu",
+        "email": "arya@monolithsystematic.com"
+      },
+      "homepage": "https://monolithsystematic.com/research",
+      "repository": "https://github.com/aryasomu/aegis",
+      "license": "MIT",
+      "keywords": [
+        "solidity",
+        "smart-contracts",
+        "evm",
+        "defi",
+        "security",
+        "gas-optimization",
+        "foundry",
+        "audit",
+        "onchain"
+      ],
+      "category": "workflow",
+      "tags": [
+        "solidity",
+        "evm",
+        "defi",
+        "security",
+        "audit",
+        "gas",
+        "foundry"
+      ],
+      "strict": false
+    }
+  ]
+}
