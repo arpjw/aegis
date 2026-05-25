@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](.claude-plugin/plugin.json)
-[![Monolith Research](https://img.shields.io/badge/Monolith-Blockchain%20Research%20Vol.%203-black.svg)](https://monolithsystematic.com/research)
+[![Monolith Research](https://img.shields.io/badge/Monolith-Blockchain%20Research%20Vol.%203-black.svg)](https://monolithsystematic.com)
 [![Install](https://img.shields.io/badge/claude%20plugin%20install-aegis-5C4EE5.svg)](#installation)
 
 Aegis is a Claude Code plugin purpose-built for smart contract and onchain development. Security review, gas accounting, DeFi economic reasoning, and protocol design patterns are first-class primitives invoked at the point of authorship. Every component is calibrated against production-grade codebases before release.
@@ -154,7 +154,7 @@ The audit-finder agent identified all three planted defects plus four additional
 
 ## Research Context
 
-Aegis is the third volume in the **Monolith Blockchain Research** series, produced by [Monolith Systematic LLC](https://monolithsystematic.com/research).
+Aegis is the third volume in the **Monolith Blockchain Research** series, produced by [Monolith Systematic LLC](https://monolithsystematic.com).
 
 **Monolith Systematic LLC** is a quantitative research firm specializing in systematic onchain markets and verifiable financial infrastructure. The firm's research division produces formal treatments of DeFi protocol mechanics, EVM execution economics, and the intersection of cryptographic verification with institutional market structure. Monolith Blockchain Research volumes are applied outputs of that program: each volume encodes a body of analytical work into tooling that practitioners can use directly.
 

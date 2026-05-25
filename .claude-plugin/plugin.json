@@ -4,9 +4,9 @@
   "description": "Smart contract and onchain development pack for Claude Code. Solidity review, audit orchestration, gas optimization, and DeFi economic review.",
   "author": {
     "name": "Arya Somu",
-    "url": "https://monolithsystematic.com/research"
+    "url": "https://monolithsystematic.com"
   },
-  "homepage": "https://monolithsystematic.com/research",
+  "homepage": "https://monolithsystematic.com",
   "repository": "https://github.com/aryasomu/aegis",
   "license": "MIT",
   "keywords": [
