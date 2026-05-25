@@ -1,0 +1,36 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    name: Validate plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: "1. Markdown lint"
+        run: npm run validate:md
+
+      - name: "2. Agent frontmatter schema"
+        run: npm run validate:agents
+
+      - name: "3. Skill frontmatter schema"
+        run: npm run validate:skills
+
+      - name: "4. Plugin manifest validation"
+        run: npm run validate:manifest
+
+      - name: "5. Component count (v0.1 cap: 15)"
+        run: npm run validate:count

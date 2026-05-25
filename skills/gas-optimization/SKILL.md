@@ -260,7 +260,7 @@ function sumArray(uint256[] calldata values) external pure returns (uint256 tota
 
 **Safe operations:**
 - Loop counter incrementing from 0 to `array.length`: the counter cannot exceed `type(uint256).max`.
-- Subtraction after an explicit `>= ` check: `if (a >= b) unchecked { a -= b; }`.
+- Subtraction after an explicit `>=` check: `if (a >= b) unchecked { a -= b; }`.
 - Addition of two `uint128` values stored in a packed slot: both are at most `type(uint128).max`, so their sum is at most `type(uint256).max / 2`, which cannot overflow `uint256`.
 
 **Unsafe operations (never use `unchecked` for):**
