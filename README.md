@@ -3,8 +3,9 @@
 **Encoded discipline for onchain development.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0--unreleased-orange.svg)](.claude-plugin/plugin.json)
+[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](.claude-plugin/plugin.json)
 [![Monolith Research](https://img.shields.io/badge/Monolith-Blockchain%20Research%20Vol.%203-black.svg)](https://monolithsystematic.com/research)
+[![Install](https://img.shields.io/badge/claude%20plugin%20install-aegis-5C4EE5.svg)](#installation)
 
 Aegis is a Claude Code plugin purpose-built for smart contract and onchain development. Security review, gas accounting, DeFi economic reasoning, and protocol design patterns are first-class primitives invoked at the point of authorship. Every component is calibrated against production-grade codebases before release.
 
@@ -121,15 +122,51 @@ Use the oracle-integration skill to review my Chainlink feed implementation in s
 
 ---
 
+## Demo
+
+`examples/toy-vault/` contains a minimal ERC-4626 vault with three intentional defects. Running `/audit --target src/ToyVault.sol` from that directory produces the following:
+
+```
+/audit complete.
+
+Report:    audit-reports/2026-05-24-audit-ToyVault.md
+Findings:  4 P0  |  3 P1  |  3 P2  |  3 P3
+Gas:       1 regression
+Tests:     PASS (6/6)
+
+ACTION REQUIRED: This codebase has blocking findings. Do not deploy until
+all P0 and P1 findings are resolved.
+```
+
+Top findings surfaced:
+
+| Priority | Finding | Source |
+|---|---|---|
+| P0 | ERC-4626 share inflation -- missing virtual shares | Aderyn, audit-finder |
+| P0 | Unprotected oracle replacement (`setOracle`) | Slither, Aderyn |
+| P0 | Unprotected pause controls (permanent fund lock) | Slither, Aderyn |
+| P1 | Chainlink staleness and round completeness unchecked | Aderyn, audit-finder |
+| GAS | Storage layout: 6 slots where 4 suffice (~4,200 gas/call saved) | gas-optimizer |
+
+The audit-finder agent identified all three planted defects plus four additional findings from independent pattern analysis, including a CEI violation via ERC-777 callback in `redeem()` and unchecked `transfer` return values throughout. The toy-vault README documents the expected output in full.
+
+---
+
 ## Research Context
 
-Aegis is the third volume in the **Monolith Blockchain Research** series, produced by [Monolith Systematic LLC](https://monolithsystematic.com/research). The series applies institutional research discipline to systematic onchain development tooling.
+Aegis is the third volume in the **Monolith Blockchain Research** series, produced by [Monolith Systematic LLC](https://monolithsystematic.com/research).
 
-- **Vol. 1** -- Quantitative DeFi research infrastructure
-- **Vol. 2** -- Systematic signal generation for onchain markets
-- **Vol. 3** -- Aegis (this repository)
+**Monolith Systematic LLC** is a quantitative research firm specializing in systematic onchain markets and verifiable financial infrastructure. The firm's research division produces formal treatments of DeFi protocol mechanics, EVM execution economics, and the intersection of cryptographic verification with institutional market structure. Monolith Blockchain Research volumes are applied outputs of that program: each volume encodes a body of analytical work into tooling that practitioners can use directly.
 
-The plugin inherits structural conventions from [ECC](https://github.com/affaan-m/ECC) by Affaan Mustafa and is dogfooded against the Vela Exchange codebase before each release.
+The Blockchain Research series:
+
+| Volume | Title | Status |
+|---|---|---|
+| Vol. 1 | Quantitative DeFi research infrastructure | Released |
+| Vol. 2 | Systematic signal generation for onchain markets | Released |
+| Vol. 3 | Aegis -- encoded discipline for onchain development | This repository |
+
+Aegis inherits structural conventions from [ECC](https://github.com/affaan-m/ECC) by Affaan Mustafa. Every component is calibrated against the Vela Exchange codebase (SSRN 6579199) before release. The `amm-orderbook-design` skill draws directly on the Vela architecture: optimistic ZK proving, Delta elimination for latency reduction, and the private L3 market data feed authentication model.
 
 ---
 
