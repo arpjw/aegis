@@ -1,0 +1,6 @@
+ToyVaultTest:testFuzz_depositRedeem_roundTrip(uint128) (runs: 256, μ: 143530, ~: 143744)
+ToyVaultTest:test_DEFECT1_inflationAttack_valueExtraction() (gas: 271797)
+ToyVaultTest:test_DEFECT1_inflationAttack_victimReverts() (gas: 180801)
+ToyVaultTest:test_DEFECT2_staleOracle() (gas: 30426)
+ToyVaultTest:test_DEFECT3_storageLayout_gasOverhead() (gas: 19436)
+ToyVaultTest:test_deposit_and_redeem() (gas: 147175)
