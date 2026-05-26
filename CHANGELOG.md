@@ -13,6 +13,104 @@ No unreleased changes at this time.
 
 ---
 
+## [0.2.0] -- 2026-05-26
+
+Cross-harness support. Aegis now generates Cursor and Codex outputs from
+the canonical Claude Code source via an idempotent sync script. Cursor and
+Codex integrations are labeled [BETA] and documented with explicit
+known-limitations sections. CI enforces sync consistency via a drift-check
+step that fails on any discrepancy between canonical source and generated
+outputs.
+
+### Added
+
+**Cross-harness sync**
+
+- `scripts/sync-harnesses.js` -- Idempotent Node.js sync script generating
+  all Cursor and Codex outputs from canonical Claude Code source. Flags:
+  `--check` (dry-run drift detection; exits 1 on any drift; used in CI),
+  `--harness=cursor|codex|all` (default: all). Hard-rejects em dash
+  characters in generated content before writing. Uses a two-pass YAML
+  parser: js-yaml first, with a line-by-line fallback for frontmatter values
+  that contain bracket characters (e.g., `argument-hint` in command files).
+- `npm run sync` -- Regenerates all harness outputs from canonical source.
+- `npm run sync:check` -- Dry-run drift check; exits 1 if any generated
+  output would change. Enforced in CI at workflow step 6.
+
+**Cursor [BETA]**
+
+- `.cursor/agents/aegis-{name}.md` (4 files) -- Agent definitions with the
+  `aegis-` namespace prefix applied. Claude Code-specific frontmatter (the
+  `model` field) is stripped; `name`, `description`, and `tools` (serialized
+  as a YAML list) are preserved alongside the full agent body.
+- `.cursor/skills/aegis-{name}/SKILL.md` (7 files) -- Skill definitions with
+  the `aegis-` namespace prefix applied to the `name` frontmatter field; all
+  other frontmatter fields and body content are preserved unchanged.
+- `.cursor/aegis-commands.md` -- Reference document for `/aegis:audit` and
+  `/aegis:gas-snapshot` as Cursor Composer task prompts, including argument
+  documentation and invocation instructions for each command phase.
+- `.cursorrules` -- Both Aegis rules (`smart-contract-security`,
+  `defi-testing`) concatenated with section headers for always-on session
+  enforcement in Cursor.
+
+**Codex [BETA]**
+
+- `AGENTS.md` -- Single-file aggregation of all 15 Aegis components in
+  top-to-bottom reading order: identity (from `.claude-plugin/plugin.json`),
+  agents (4), skills (7), rules (2), commands (2). Structured for Codex
+  project context loading via `codex --project-doc AGENTS.md` or upload to
+  the Codex web app workspace.
+
+**CI and validation**
+
+- `.github/workflows/test.yml` step 6 -- `npm run sync:check`: harness drift
+  detection; fails CI if any generated output is inconsistent with canonical
+  source.
+- `.github/workflows/test.yml` step 7 -- `npm run validate:harness`:
+  structural assertions: `.cursorrules` exists, `AGENTS.md` exists,
+  `.cursor/agents/` contains exactly 4 `.md` files, `.cursor/skills/`
+  contains exactly 7 subdirectories.
+- `scripts/validate.js` check 6 (`harness`) -- Mirrors step 7 above for
+  local runs. Invocable via `npm run validate:harness` or as part of
+  `npm run validate`.
+- `scripts/validate.js` check 1 (`md`) -- Markdown lint extended to cover
+  the `.cursor/` tree and `AGENTS.md`. Two-pass implementation: canonical
+  source files receive the full rule set; generated aggregation files run
+  with `MD025` disabled (multiple H1 headings are structural in aggregation
+  documents, not a style defect).
+- `npm run validate:harness` -- Local harness structure check; mirrors CI
+  step 7.
+
+**Documentation**
+
+- `README.md` -- New "Supported Harnesses" section between Installation and
+  Components: harness maturity table, manual install steps for Cursor and
+  Codex, and Known Limitations subsections for each beta harness. New
+  "Cross-harness sync" subsection in Contributing documenting the
+  canonical-source discipline and the CI enforcement mechanism.
+- `CLAUDE.md` -- Version updated to 0.2.0. New "Cross-harness Support"
+  section: harness maturity table, single-source-of-truth principle and hard
+  rule against direct edits to generated files, adapter patterns following
+  ECC conventions (`aegis-` namespace prefix for Cursor, flat `AGENTS.md`
+  for Codex), beta harness requirements (explicit `[BETA]` label and
+  known-limitations sections in all user-facing documentation), and
+  maintenance discipline (every component change requires `npm run sync` and
+  CI blocks on drift). Development Protocol updated: step 5 added (mandatory
+  `npm run sync` before opening a pull request), prior step 5 renumbered to
+  step 6. Repository structure diagram updated to reflect `.cursor/`,
+  `AGENTS.md`, and `scripts/sync-harnesses.js`.
+- `CHANGELOG.md` -- This entry.
+
+### Changed
+
+- `.gitignore` -- Blanket `.cursor/` ignore replaced with `.cursor/*` plus
+  explicit negations for `agents/`, `skills/`, and `aegis-commands.md`.
+  Cursor IDE local files remain ignored; Aegis-generated cross-harness
+  outputs are now tracked by git.
+- `package.json` -- Added scripts: `validate:harness`, `sync`, `sync:check`.
+
+---
+
 ## [0.1.0] -- 2026-05-24
 
 Initial release. Fifteen components across four types, calibrated against the

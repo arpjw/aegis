@@ -3,7 +3,7 @@
 **Encoded discipline for onchain development.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](.claude-plugin/plugin.json)
+[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](.claude-plugin/plugin.json)
 [![Monolith Research](https://img.shields.io/badge/Monolith-Blockchain%20Research%20Vol.%203-black.svg)](https://monolithsystematic.com)
 [![Install](https://img.shields.io/badge/claude%20plugin%20install-aegis-5C4EE5.svg)](#installation)
 
@@ -40,6 +40,61 @@ Then register it in your project's `.claude/settings.json`:
 ```
 
 Restart Claude Code to load the plugin.
+
+---
+
+## Supported Harnesses
+
+| Harness | Status | Entry Point |
+|---|---|---|
+| Claude Code | GA (primary) | Plugin manager or manual clone |
+| Cursor | [BETA] | `.cursor/` tree + `.cursorrules` |
+| Codex | [BETA] | `AGENTS.md` |
+
+### Claude Code (GA, primary)
+
+Install via the plugin manager or manual clone as described above. All 15 components are natively supported: agents auto-invoke on trigger conditions, slash commands (`/audit`, `/gas-snapshot`) are invocable directly, rules activate in every session, and skills respond to invocation by name.
+
+### Cursor [BETA]
+
+Aegis does not publish a dedicated Cursor extension. Cross-harness outputs are generated from the canonical Claude Code source via `npm run sync` and committed to the repository alongside it.
+
+**Manual install:**
+
+1. Clone the Aegis repository:
+   ```bash
+   git clone https://github.com/aryasomu/aegis /tmp/aegis
+   ```
+2. Copy the Cursor outputs into your project root:
+   ```bash
+   cp -r /tmp/aegis/.cursor/agents .cursor/
+   cp -r /tmp/aegis/.cursor/skills .cursor/
+   cp /tmp/aegis/.cursor/aegis-commands.md .cursor/aegis-commands.md
+   cp /tmp/aegis/.cursorrules .cursorrules
+   ```
+   If you maintain multiple Aegis-backed projects, clone once and symlink the `.cursor/` subdirectories.
+
+**Known limitations (Cursor beta):**
+
+- No native slash commands. `/audit` and `/gas-snapshot` are documented as Composer task prompts in `.cursor/aegis-commands.md`; open that file, copy the relevant command body, and submit it as a Composer task.
+- Agents must be invoked explicitly via `@Aegis` or by pasting the agent instruction into the Composer context. There is no automatic invocation on Solidity file modification.
+- Tool calls that shell out to `forge`, `slither`, or `aderyn` require Cursor's terminal integration to be active. Behavior is not guaranteed across all Cursor workspace configurations.
+
+### Codex [BETA]
+
+Aegis generates a single `AGENTS.md` file at the repository root. Point Codex at this file to load all 15 components as project context.
+
+**CLI:**
+```bash
+codex --project-doc AGENTS.md
+```
+
+**App (OpenAI Codex web):** Upload `AGENTS.md` as a project file in the workspace. The identity, agents, skills, rules, and commands sections load in top-to-bottom order, matching the structure Codex expects.
+
+**Known limitations (Codex beta):**
+
+- All 15 Aegis components are concatenated into a single file. On sessions involving large codebases or extensive conversation history, `AGENTS.md` occupies significant context budget. The Claude Code installation is recommended for sustained production sessions.
+- Agent delegation is not automatic. The `defi-economist` agent, for example, will not invoke when fee logic is modified; it must be referenced explicitly in the task prompt.
 
 ---
 
@@ -175,6 +230,18 @@ Aegis inherits structural conventions from [ECC](https://github.com/affaan-m/ECC
 Contributions are welcome and held to the same standard as Monolith Systematic research publications. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 The short version: every component must be dogfooded on the Vela Exchange codebase, must not exceed the 15-component cap, must contain no em dashes, and must maintain the institutional register of the project.
+
+### Cross-harness sync
+
+The canonical source for all Aegis components is the Claude Code format: `agents/`, `skills/`, `rules/`, and `commands/`. The Cursor outputs in `.cursor/` and the Codex output `AGENTS.md` are generated artifacts produced by `scripts/sync-harnesses.js`.
+
+Never edit `.cursor/` files or `AGENTS.md` directly. All changes must flow through the canonical source:
+
+1. Modify the relevant file in `agents/`, `skills/`, `rules/`, or `commands/`.
+2. Run `npm run sync` to regenerate all harness outputs.
+3. Commit both the canonical change and the regenerated outputs together.
+
+CI enforces consistency via `npm run sync:check`, which exits non-zero if any generated output drifts from what the canonical source would produce. Pull requests that modify canonical source without running sync will fail the check at step 6 of the test workflow.
 
 ---
 
