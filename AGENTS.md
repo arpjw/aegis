@@ -2,7 +2,7 @@
 
 > Smart contract and onchain development pack for Claude Code. Solidity review, audit orchestration, gas optimization, and DeFi economic review.
 
-**Version:** 0.1.0  
+**Version:** 0.2.0  
 **Author:** Arya Somu  
 **License:** MIT  
 **Repository:** https://github.com/aryasomu/aegis
