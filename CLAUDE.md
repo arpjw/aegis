@@ -7,7 +7,7 @@
 **License:** MIT  
 **Series:** Monolith Blockchain Research, Vol. 3  
 **Companion:** Complementary to ECC (github.com/affaan-m/ECC); assumes ECC conventions as the baseline harness standard  
-**Version:** 0.1 (component-capped)
+**Version:** 0.2.0
 
 ---
 
@@ -24,9 +24,13 @@ The plugin targets Solidity engineers, protocol researchers, and quantitative De
 ```
 aegis/
 ├── CLAUDE.md                        # This file
+├── AGENTS.md                        # GENERATED -- do not edit directly
 ├── .claude-plugin/
 │   ├── plugin.json                  # Claude Code plugin manifest
 │   └── marketplace.json             # Registry entry
+├── .cursor/                         # GENERATED -- do not edit directly
+│   └── rules/
+│       └── aegis-*.mdc
 ├── agents/
 │   ├── solidity-reviewer.md
 │   ├── audit-finder.md
@@ -43,9 +47,11 @@ aegis/
 ├── rules/
 │   ├── smart-contract-security.md
 │   └── defi-testing.md
-└── commands/
-    ├── audit.md
-    └── gas-snapshot.md
+├── commands/
+│   ├── audit.md
+│   └── gas-snapshot.md
+└── scripts/
+    └── sync-harnesses.js            # Generates .cursor/ and AGENTS.md from canonical source
 ```
 
 ---
@@ -127,6 +133,43 @@ Commands are user-invocable slash commands defined under `commands/`.
 
 ---
 
+## Cross-Harness Support (v0.2.0)
+
+Aegis supports three agentic harnesses with differentiated maturity levels:
+
+| Harness | Status | Entry Point |
+|---------|--------|-------------|
+| Claude Code | GA (primary) | `.claude-plugin/plugin.json` |
+| Cursor | Beta | `.cursor/rules/aegis-*.mdc` |
+| Codex | Beta | `AGENTS.md` |
+
+### Single Source of Truth
+
+The canonical source for all Aegis components is the Claude Code format: `agents/`, `skills/`, `rules/`, and `commands/`. Cursor and Codex outputs are generated artifacts, not primary sources. All edits to Aegis components must be made in the canonical source directories.
+
+The generated outputs in `.cursor/` and `AGENTS.md` are produced by `scripts/sync-harnesses.js` and must never be edited directly. Direct edits to generated files will be overwritten on the next sync.
+
+**Hard rule:** Do not edit `.cursor/` files or `AGENTS.md` directly. All changes flow through canonical source plus `npm run sync`.
+
+### Adapter Patterns
+
+Following ECC adapter conventions:
+
+- **Cursor:** Components are emitted as `.mdc` files under `.cursor/rules/`, namespaced with the `aegis-` prefix (e.g., `aegis-solidity-reviewer.mdc`, `aegis-smart-contract-security.mdc`).
+- **Codex:** All components are collapsed into a single `AGENTS.md` file at the repository root, following the OpenAI Codex convention for agent instruction files.
+
+### Beta Harness Requirements
+
+The Cursor and Codex integrations carry beta status. Any README, documentation, or user-facing content referencing these harnesses must apply the `[BETA]` label and include an explicit known-limitations section covering: component coverage gaps relative to the Claude Code primary, sync latency, and absence of harness-native tool invocation.
+
+### Maintenance Discipline
+
+Every component addition, modification, or removal must be followed by `npm run sync` to regenerate all harness outputs. This step is enforced in CI: the sync workflow validates that `.cursor/` and `AGENTS.md` are consistent with the canonical source on every pull request. Pull requests that modify canonical source without running sync will fail the consistency check.
+
+The style guide prohibition on em dashes applies to all generated outputs. The sync script must strip or reject em dash characters in component content before writing to `.cursor/` or `AGENTS.md`.
+
+---
+
 ## Plugin Manifest Conventions
 
 Following ECC conventions exactly:
@@ -177,7 +220,8 @@ Every component must satisfy all three conditions before merge:
 2. Write agents and skills as dense, specific instruction sets. Generic advice belongs in documentation, not in agent bodies. An agent that could apply to any software project is not an Aegis agent.
 3. Test every component against the Vela Exchange codebase before opening a pull request. Record findings in the PR description with sufficient detail to reproduce them.
 4. The 15-component cap is binding for v0.1. If a new component is compelling enough to add, remove one or increment the version.
-5. Do not modify `CLAUDE.md` to accommodate a component that does not meet the quality gate. Modify the component.
+5. After every component addition, modification, or removal, run `npm run sync` to regenerate `.cursor/` and `AGENTS.md`. Do not open a pull request without doing so; the CI consistency check will block merge.
+6. Do not modify `CLAUDE.md` to accommodate a component that does not meet the quality gate. Modify the component.
 
 ---
 

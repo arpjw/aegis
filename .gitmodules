@@ -1,0 +1,3 @@
+[submodule "examples/toy-vault/lib/forge-std"]
+	path = examples/toy-vault/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std

@@ -9,7 +9,9 @@
     "validate:agents": "node scripts/validate.js agents",
     "validate:skills": "node scripts/validate.js skills",
     "validate:manifest": "node scripts/validate.js manifest",
-    "validate:count": "node scripts/validate.js count"
+    "validate:count": "node scripts/validate.js count",
+    "sync": "node scripts/sync-harnesses.js",
+    "sync:check": "node scripts/sync-harnesses.js --check"
   },
   "devDependencies": {
     "js-yaml": "^4.1.0",
