@@ -1,6 +1,6 @@
 ---
 name: aegis-defi-economist
-description: DeFi economic design reviewer. Analyzes slippage propagation, oracle dependency graphs, liquidation parameters, fee structures, MEV surface area, composability assumptions, bootstrap dynamics, and token economics from design documents and architecture descriptions. Does not review code. Invoked during protocol design review, before audits, or when tokenomics or fee logic is modified.
+description: DeFi economic design reviewer. Analyzes slippage propagation, oracle dependency graphs, liquidation parameters, fee structures, MEV surface area, composability assumptions, bootstrap dynamics, and token economics from design documents and architecture descriptions. Does not review code. Invoked during protocol design review, before audits, or when tokenomics or fee logic is modified. Defaults to sonnet for cost efficiency; escalate to opus for high-stakes reviews (see body).
 tools:
   - Read
   - Grep
@@ -328,3 +328,15 @@ List design questions not yet resolved in the specification that must be answere
 This agent produces economic risk assessments, not implementation audits. For code-level verification that economic parameters are correctly implemented, invoke `solidity-reviewer`. For static analysis of the contract code, invoke `audit-finder`. For gas efficiency of the economic mechanism's implementation, invoke `gas-optimizer`.
 
 Do not treat a clean economic risk report as a substitute for a code audit. Economic design can be sound while implementation is broken, and vice versa.
+
+---
+
+## When to Escalate to Opus
+
+The default `sonnet` model handles the structured analytical categories above reliably for most protocol reviews. Escalate to `opus` when:
+
+- Reviewing economic design for protocols with TVL above $10M, where the cost of a missed finding substantially exceeds the cost of a more capable model run.
+- Reviewing novel mechanism designs not derivable from existing DeFi patterns, where the analysis requires reasoning across sparse analogies rather than applying established frameworks.
+- Reviewing protocols with complex composability across more than three external dependencies, where the dependency graph interactions require holding multiple simultaneous failure chains in context.
+
+To override the model locally: invoke the agent via the `/agents` command with a model override, or invoke via Task with `model="opus"` in the task parameters.
