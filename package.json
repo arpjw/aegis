@@ -10,6 +10,7 @@
     "validate:skills": "node scripts/validate.js skills",
     "validate:manifest": "node scripts/validate.js manifest",
     "validate:count": "node scripts/validate.js count",
+    "validate:harness": "node scripts/validate.js harness",
     "sync": "node scripts/sync-harnesses.js",
     "sync:check": "node scripts/sync-harnesses.js --check"
   },

@@ -1,0 +1,384 @@
+# Aegis Rules
+
+Mandatory constraints for all Solidity authorship, review, and testing in this repository.
+
+---
+
+# DeFi Testing
+
+Mandatory testing standards for all Solidity contracts in this repository. These thresholds are enforced by the CI workflow (`lint.yml`). A pull request that does not meet these thresholds does not merge.
+
+---
+
+## Coverage Thresholds
+
+**Minimum forge coverage for `src/`: 90% line coverage, 85% branch coverage, 100% function coverage.**
+
+Measure with:
+```bash
+forge coverage --report summary
+```
+
+The thresholds apply to the `src/` directory only. Test helpers in `test/` and deployment scripts in `script/` are excluded from coverage measurement.
+
+**Function coverage at 100% is non-negotiable.** A function with zero test coverage is an untested function. Every function deployed to mainnet must have at least one test that calls it and asserts its output. If a function is unreachable by design, document why and remove it rather than leaving dead code.
+
+**Branch coverage at 85%** allows for rare defensive branches (e.g., unreachable `else` clauses in library math that the compiler requires but cannot be triggered in practice). Every uncovered branch must be identified by name in the pull request description. The reviewer confirms that each uncovered branch is genuinely unreachable before approving.
+
+Enforce in CI:
+```yaml
+- name: Coverage gate
+  run: |
+    forge coverage --report summary 2>&1 | tee coverage.txt
+    # Parse line/branch/function percentages and fail if below threshold
+    line=$(grep "src/" coverage.txt | awk '{print $NF}' | tr -d '%')
+    if [ "$(echo "$line < 90" | bc)" -eq 1 ]; then
+      echo "ERROR: Line coverage $line% is below 90% threshold"
+      exit 1
+    fi
+```
+
+---
+
+## Fuzz Test Configuration
+
+**Minimum fuzz iterations: 256 per test (standard contracts), 1024 per test (high-value contracts).**
+
+Configure in `foundry.toml`:
+
+```toml
+[profile.default]
+fuzz_runs = 256
+
+[profile.ci]
+fuzz_runs = 1024
+
+[profile.intensive]
+fuzz_runs = 100000
+```
+
+A **high-value contract** is any contract that: holds or routes more than $500,000 in user funds at expected TVL, implements a liquidation mechanism, or contains custom cryptographic verification logic. High-value contracts must use the `ci` profile minimum of 1024 fuzz runs in CI.
+
+**Every fuzz test must have at least one `assert*` call.** A fuzz test with no assertions is a compilation check, not a property test. The CI workflow must verify that no `testFuzz_*` function contains zero assertions. Enforce via:
+
+```bash
+for f in $(grep -rl "function testFuzz_" test/ --include="*.sol"); do
+  # Each fuzz function must contain assert
+  if ! grep -A 30 "function testFuzz_" "$f" | grep -q "assert"; then
+    echo "ERROR: Fuzz test in $f has no assertion"
+    exit 1
+  fi
+done
+```
+
+**`bound` is required on all numeric fuzz inputs.** Unbounded inputs waste fuzzer budget on precondition reverts. The CI workflow checks that every `uint` or `int` fuzz parameter appears in a `bound(param, ...)` call within the same test function body. Parameters that are structurally bounded by type (e.g., `bool`, `address`) are exempt.
+
+---
+
+## Invariant Test Configuration
+
+**Minimum invariant runs: 256. Minimum depth per run: 15.**
+
+Configure in `foundry.toml`:
+
+```toml
+[profile.default]
+invariant_runs  = 256
+invariant_depth = 15
+
+[profile.ci]
+invariant_runs  = 512
+invariant_depth = 30
+```
+
+**Invariant tests are required for every stateful protocol contract.** A contract is stateful if it maintains token balances, position records, accumulated fees, or governance state across multiple transactions. Every such contract must have at least one invariant test contract with at least one `invariant_*` function.
+
+**Handler contracts are required.** An invariant test that does not use a handler will spend most of its budget on calls that revert on preconditions and will explore very shallow state space. Every invariant test must:
+
+1. Define a `VaultHandler` (or equivalent) contract in `test/invariant/handlers/`.
+2. Call `targetContract(address(handler))` in `setUp`.
+3. Achieve a call success rate of at least 50% (verified by `forge test --verbosity 4` output). A success rate below 50% indicates the handler is misconfigured.
+
+**Ghost variables are required for accounting invariants.** Any invariant that asserts a relationship between on-chain state and expected state must track expected state in ghost variables on the handler. An invariant that asserts only a tautological property (e.g., `totalSupply >= 0`) is not a valid invariant.
+
+Required invariant coverage by contract type:
+
+| Contract type | Required invariants |
+|---|---|
+| ERC-4626 vault | `totalAssets == token.balanceOf(vault)`, `totalSupply > 0 iff totalAssets > 0`, `no user can redeem more than deposited (no-free-lunch)` |
+| Lending protocol | `sum(collateral) >= sum(debt) * minCollateralRatio`, `badDebtAccrued <= insuranceFund` |
+| AMM | `k_after >= k_before (fees increase k)`, `reserves > 0 unless fully drained` |
+| Token | `sum(balanceOf) == totalSupply`, `no mint without authorized caller` |
+| Access-controlled contract | `no privileged state change without role check` |
+
+---
+
+## Mainnet Fork Testing
+
+**Mainnet forking is required for any contract that integrates with an external deployed protocol.**
+
+A contract integrates with an external protocol if it: calls a Chainlink feed, calls a Uniswap pool, calls an Aave lending pool, calls any bridge, or transfers tokens to or from any address that is not a contract deployed in the same test run.
+
+Fork test requirements:
+
+- **Block number must be pinned.** Every `vm.createFork` call must specify an explicit block number. Unpinned forks produce non-deterministic tests.
+- **Fork RPC URL must be loaded from environment.** Use `vm.envString("MAINNET_RPC_URL")`. Do not hardcode RPC URLs.
+- **Fork tests must live in `test/integration/`.** Separate from unit and fuzz tests to allow selective CI execution.
+- **At minimum, one fork test must verify the happy path of every external protocol integration.** If the protocol integrates Chainlink ETH/USD, a fork test must confirm that the price feed returns a non-zero, non-stale price at the pinned block.
+
+```toml
+# foundry.toml
+[rpc_endpoints]
+mainnet  = "${MAINNET_RPC_URL}"
+arbitrum = "${ARBITRUM_RPC_URL}"
+```
+
+```solidity
+// In every integration test setUp():
+uint256 public constant FORK_BLOCK = 22_000_000; // Pin explicitly
+
+function setUp() public {
+    vm.createFork(vm.envString("MAINNET_RPC_URL"), FORK_BLOCK);
+}
+```
+
+Fork test CI gate:
+```yaml
+- name: Integration tests (fork)
+  env:
+    MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+  run: forge test --match-path "test/integration/*" --fork-url $MAINNET_RPC_URL
+```
+
+---
+
+## Gas Snapshot Discipline
+
+**Gas snapshots must be committed and CI-enforced.**
+
+A gas snapshot records the gas cost of every test function. It is the mechanism by which gas regressions are caught before they reach production.
+
+**Baseline snapshot protocol:**
+
+1. After every merge to `main`, run `forge snapshot` and commit the result as `.gas-snapshot`.
+2. In CI, every pull request runs `forge snapshot --check`, which fails if any test's gas cost exceeds the baseline.
+3. A gas increase in any function requires one of:
+   - A written justification in the pull request ("this function now does X which costs Y gas because Z").
+   - An invocation of the `gas-optimizer` agent to identify whether the regression can be eliminated.
+
+**Snapshot commands:**
+
+```bash
+# Record baseline after merge
+forge snapshot --snap .gas-snapshot
+
+# Check in CI (fails on any regression)
+forge snapshot --check
+
+# Check with tolerance (allow up to 1% increase)
+forge snapshot --check --tolerance 1
+```
+
+**Snapshots must cover all functions in `src/`.** Run `forge test --gas-report` and confirm that every function in `src/` appears in the report. A function not exercised by any test is also a coverage gap (see coverage thresholds above).
+
+**Gas snapshot is committed to version control.** The `.gas-snapshot` file is not gitignored. Every pull request that changes gas costs (up or down) will show a diff in `.gas-snapshot`. Reviewers are expected to inspect this diff as part of the review.
+
+---
+
+## Test Organization
+
+Tests are organized by type in the following directories. The structure is enforced at review time.
+
+```
+test/
+  unit/          # Deterministic tests with specific inputs
+  fuzz/          # Property tests with randomized inputs
+  invariant/     # Protocol-level invariant tests
+    handlers/    # Handler contracts for invariant campaigns
+  integration/   # Fork tests against live protocols
+  helpers/       # Shared fixtures, mocks, base contracts
+```
+
+**Naming conventions** (enforced by CI grep):
+
+| Test type | Function prefix | Example |
+|---|---|---|
+| Unit | `test_` | `test_deposit_mintsShares` |
+| Unit (failure) | `test_revert_` | `test_revert_deposit_whenZero` |
+| Fuzz | `testFuzz_` | `testFuzz_deposit_sharesProportional` |
+| Invariant | `invariant_` | `invariant_totalAssetsEqBalance` |
+| Fork | `testFork_` | `testFork_chainlinkFeed_notStale` |
+
+**No test function may share a name across test contracts.** Duplicate test names produce misleading coverage reports. The CI workflow runs `grep -rn "function test_\|function testFuzz_\|function invariant_" test/ --include="*.sol" | sort | uniq -d` and fails if any duplicates are found.
+
+---
+
+## Enforcement Summary
+
+| Rule | Blocking? | Enforced by |
+|---|---|---|
+| Slither: no High/Critical | Yes | CI lint workflow |
+| Aderyn: no High | Yes | CI lint workflow |
+| Line coverage >= 90% | Yes | CI coverage gate |
+| Branch coverage >= 85% | Yes | CI coverage gate |
+| Function coverage == 100% | Yes | CI coverage gate |
+| Fuzz runs >= 256 (standard) | Yes | `foundry.toml` profile |
+| Fuzz runs >= 1024 (high-value) | Yes | `foundry.toml` CI profile |
+| Fuzz tests have assertions | Yes | CI grep check |
+| Invariant runs >= 256, depth >= 15 | Yes | `foundry.toml` profile |
+| Invariant tests use handlers | Yes | PR review |
+| Fork tests for external integrations | Yes | PR review + CI fork gate |
+| Fork block pinned | Yes | PR review |
+| Gas snapshot committed | Yes | Git diff check in CI |
+| `forge snapshot --check` passes | Yes | CI gas gate |
+
+---
+
+# Smart Contract Security
+
+Mandatory constraints for every Solidity contract in this repository. These rules apply at authorship, at pre-merge review, and at pre-deployment. No exception requires approval from the protocol's security council and must be documented in the relevant pull request.
+
+---
+
+## Static Analysis
+
+**Slither must pass with no High or Critical findings before any merge.**
+
+Run:
+```bash
+slither . --json .audit/slither-report.json
+```
+
+A finding classified as `High` or `Critical` by Slither's impact field blocks the merge. Medium findings must be triaged and either fixed or acknowledged with a written justification in the pull request. Informational findings are recorded but do not block.
+
+A Slither run that errors due to compilation failure is treated as a Critical finding. Fix the compilation error first.
+
+**Aderyn must pass with no High findings before any merge.**
+
+Run:
+```bash
+aderyn --output .audit/aderyn-report.json .
+```
+
+Aderyn High findings block the merge. Low findings are triaged equivalently to Slither Mediums.
+
+Do not suppress findings with `// slither-disable` or equivalent annotations without a written justification committed alongside the suppression. Suppressions without justification are treated as unresolved findings.
+
+---
+
+## Test Requirements
+
+**Fuzz tests must exist for every external function with non-trivial state changes.**
+
+A function has non-trivial state changes if it modifies any storage variable that affects: token balances, position sizes, protocol parameters, access control assignments, or oracle configuration. Pure computations and view functions are exempt.
+
+Each fuzz test must:
+- Use `bound` to constrain inputs to the realistic operational range.
+- Assert at least one meaningful property of the output. A fuzz test with no assertion is not a test.
+- Run a minimum of 256 iterations (configured in `foundry.toml` under `fuzz_runs`). High-value contracts require 1024 iterations minimum; see `defi-testing` rule for thresholds.
+
+**Invariant tests must exist for every protocol-level invariant.**
+
+A protocol-level invariant is any property that must hold across all possible sequences of valid user interactions. Examples:
+- `totalSupply == sum of all balances`
+- `totalAssets >= sum of all user claims`
+- `no position is simultaneously long and short`
+
+Each invariant test must use a handler contract that constrains the fuzzer to valid operation sequences. An invariant test without a handler that achieves at least a 50% call success rate (measured by `forge test --verbosity 4`) is considered misconfigured and must be corrected before merge.
+
+---
+
+## External Call Discipline
+
+**No unchecked external calls.**
+
+Every `call`, `delegatecall`, `staticcall`, `send`, and token transfer must have its return value checked and acted upon. Specifically:
+
+- Low-level `call` returns `(bool success, bytes memory data)`. If `success` is false and the code proceeds as if the call succeeded, this is a blocking defect.
+- ERC-20 `transfer` and `transferFrom` must use `SafeERC20` (`safeTransfer`, `safeTransferFrom`). Direct calls to `transfer` are prohibited.
+- `send` is prohibited. Use `call{value: amount}("")` with return value check.
+- `.transfer()` is prohibited. Use `call{value: amount}("")` with return value check.
+
+**All external calls must follow Checks-Effects-Interactions (CEI).**
+
+Within any function containing an external call:
+1. All require / revert conditions are evaluated first (Checks).
+2. All storage state updates are applied before any external call (Effects).
+3. External calls occur last (Interactions).
+
+A function that updates storage after an external call is a reentrancy vulnerability unless a `nonReentrant` guard is applied and the deviation from CEI is documented in a NatSpec `@dev` comment explaining why CEI cannot be satisfied structurally.
+
+---
+
+## Access Control
+
+**Every privileged function must have an access control modifier.**
+
+A function is privileged if it can: change protocol parameters, upgrade implementation addresses, pause or unpause the system, mint tokens beyond the initial supply, withdraw fees, modify oracle configuration, or change access control assignments. Every such function must have one of the following:
+
+- `onlyOwner` (or equivalent single-role check)
+- `onlyRole(ROLE_NAME)` from OpenZeppelin `AccessControl`
+- A custom modifier whose body contains an explicit caller check
+
+A function with no access modifier whose name implies privileged behavior (`setFee`, `pause`, `upgrade`, `withdrawEth`, `grantRole`) is a blocking defect.
+
+**Two-step ownership transfer is required.**
+
+Single-step `transferOwnership` is prohibited. The protocol must use `Ownable2Step` from OpenZeppelin or an equivalent pattern that requires the new owner to call `acceptOwnership` before the transfer completes.
+
+If the protocol uses `AccessControl` rather than `Ownable`, the `DEFAULT_ADMIN_ROLE` must be held by a multi-signature wallet or timelock contract, not an EOA, on mainnet deployments.
+
+**Role separation is required for high-risk roles.**
+
+A single address must not simultaneously hold the roles of: upgrader, pauser, fee recipient, and oracle configurator. At minimum, the upgrader role must be distinct from all other roles and must require a timelock of at least 48 hours on mainnet.
+
+---
+
+## Pausability
+
+**Safety-critical protocols must implement a pause mechanism.**
+
+A protocol is safety-critical if a compromised or malfunctioning component (oracle failure, external protocol exploit, unexpected price movement) can cause irreversible loss of user funds. All lending protocols, vaults, and protocols with liquidation mechanics are safety-critical by definition.
+
+Pause requirements:
+- A `pause()` function callable by a designated guardian role (not the owner role, to allow rapid response).
+- A `unpause()` function callable by the owner or a governance multisig with a higher threshold than the guardian.
+- All state-mutating user functions must revert with a descriptive custom error when paused.
+- The pause state must be queryable via a `paused()` view function.
+
+Use `Pausable` from OpenZeppelin as the base implementation. Do not implement a custom pause mechanism unless the OpenZeppelin implementation has a documented incompatibility with the protocol's architecture.
+
+---
+
+## Pre-Merge Checklist
+
+Before opening a pull request, the author must confirm all of the following:
+
+- [ ] `slither .` produces no High or Critical findings, or all such findings have written justifications.
+- [ ] `aderyn .` produces no High findings, or all such findings have written justifications.
+- [ ] Every new or modified external function with non-trivial state changes has a corresponding fuzz test.
+- [ ] Protocol-level invariants are covered by invariant tests with handlers.
+- [ ] No `transfer()`, `send()`, or unchecked `call` return values are present.
+- [ ] All external calls follow CEI, or deviations are guarded by `nonReentrant` and documented.
+- [ ] Every privileged function has an access control modifier.
+- [ ] `Ownable2Step` (or equivalent) is used for any ownership transfer.
+- [ ] Pausability is implemented if the contract is safety-critical.
+- [ ] `forge test` passes with zero failures.
+- [ ] `forge build` produces no compiler errors and no warnings classified as High by the compiler.
+
+---
+
+## Pre-Deployment Checklist
+
+Before deploying to mainnet, the deployer must confirm all of the following, in addition to the pre-merge checklist above:
+
+- [ ] An external audit has been completed and all Critical and High findings are resolved.
+- [ ] `forge snapshot` has been committed and the CI gas gate passes.
+- [ ] All constructor arguments have been verified against the deployment parameters document.
+- [ ] Proxy initialization: `_disableInitializers()` is called in the implementation constructor, and `initialize()` has been called exactly once on the proxy.
+- [ ] The upgrader role is held by a timelock with at least 48 hours delay.
+- [ ] The guardian (pauser) role is held by a multisig reachable within 30 minutes.
+- [ ] Oracle feeds are verified to be live, with correct addresses and staleness windows confirmed against Chainlink documentation.
+- [ ] Chainlink Sequencer Uptime Feed is configured if deployed on Arbitrum, Optimism, or Base.
+- [ ] The deployment transaction has been reviewed by a second engineer who did not write the deployment script.
+- [ ] A post-deployment verification script confirms all constructor and initialization parameters match the specification.

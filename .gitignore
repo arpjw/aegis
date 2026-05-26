@@ -61,7 +61,15 @@ Thumbs.db
 .settings/
 *.sublime-project
 *.sublime-workspace
-.cursor/
+# Cursor IDE local files are ignored by default, but Aegis-generated outputs
+# under .cursor/agents/, .cursor/skills/, and .cursor/aegis-commands.md ARE
+# tracked as cross-harness sync artifacts. See scripts/sync-harnesses.js.
+.cursor/*
+!.cursor/agents/
+!.cursor/agents/**
+!.cursor/skills/
+!.cursor/skills/**
+!.cursor/aegis-commands.md
 
 # Environment files
 .env

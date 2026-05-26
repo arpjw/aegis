@@ -34,3 +34,9 @@ jobs:
 
       - name: "5. Component count (v0.1 cap: 15)"
         run: npm run validate:count
+
+      - name: "6. Harness sync check"
+        run: npm run sync:check
+
+      - name: "7. Harness structure"
+        run: npm run validate:harness

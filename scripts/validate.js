@@ -15,7 +15,7 @@ try { markdownlintSync = require('markdownlint/sync').lint; } catch {
 }
 
 const ROOT   = path.resolve(__dirname, '..');
-const CHECKS = ['md', 'agents', 'skills', 'manifest', 'count'];
+const CHECKS = ['md', 'agents', 'skills', 'manifest', 'count', 'harness'];
 const arg    = process.argv[2] || 'all';
 
 if (arg !== 'all' && !CHECKS.includes(arg)) {
@@ -60,7 +60,8 @@ function section(n)  { console.log(`\n[${n}]`); }
 function checkMd() {
   section('1. Markdown lint');
 
-  const files = [
+  // Canonical source: full rule set enforced.
+  const canonicalFiles = [
     ...findMdFiles(path.join(ROOT, 'agents')),
     ...findMdFiles(path.join(ROOT, 'skills')),
     ...findMdFiles(path.join(ROOT, 'rules')),
@@ -70,26 +71,41 @@ function checkMd() {
       .filter(f => fs.existsSync(f)),
   ];
 
+  // Generated aggregation files: MD025 (single top-level heading) is disabled because
+  // these documents intentionally embed multiple source files, each with its own H1.
+  const generatedFiles = [
+    ...findMdFiles(path.join(ROOT, '.cursor')),
+    ...['AGENTS.md'].map(f => path.join(ROOT, f)).filter(f => fs.existsSync(f)),
+  ];
+
   const configPath = path.join(ROOT, '.markdownlint.json');
-  const config = fs.existsSync(configPath)
+  const baseConfig = fs.existsSync(configPath)
     ? JSON.parse(fs.readFileSync(configPath, 'utf8'))
     : { default: true, MD013: false, MD024: false, MD033: false, MD034: false, MD041: false };
 
-  const results = markdownlintSync({
-    files,
-    config,
-    frontMatter: /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/,
-  });
+  const generatedConfig = { ...baseConfig, MD025: false };
+  const fmPattern = { frontMatter: /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/ };
 
   let count = 0;
-  for (const [file, issues] of Object.entries(results)) {
-    for (const issue of issues) {
-      const detail = issue.errorDetail ? `: ${issue.errorDetail}` : '';
-      fail(`${rel(file)}:${issue.lineNumber}  [${issue.ruleNames[0]}]  ${issue.ruleDescription}${detail}`);
-      count++;
+  function reportResults(results) {
+    for (const [file, issues] of Object.entries(results)) {
+      for (const issue of issues) {
+        const detail = issue.errorDetail ? `: ${issue.errorDetail}` : '';
+        fail(`${rel(file)}:${issue.lineNumber}  [${issue.ruleNames[0]}]  ${issue.ruleDescription}${detail}`);
+        count++;
+      }
     }
   }
-  if (count === 0) pass(`${files.length} file(s) pass markdownlint`);
+
+  if (canonicalFiles.length > 0) {
+    reportResults(markdownlintSync({ files: canonicalFiles, config: baseConfig, ...fmPattern }));
+  }
+  if (generatedFiles.length > 0) {
+    reportResults(markdownlintSync({ files: generatedFiles, config: generatedConfig, ...fmPattern }));
+  }
+
+  const total = canonicalFiles.length + generatedFiles.length;
+  if (count === 0) pass(`${total} file(s) pass markdownlint`);
 }
 
 // ---------------------------------------------------------------------------
@@ -235,10 +251,69 @@ function checkCount() {
 }
 
 // ---------------------------------------------------------------------------
+// Check 6: Harness structure validation
+// ---------------------------------------------------------------------------
+
+function checkHarness() {
+  section('6. Harness structure  (4 agents, 7 skills, .cursorrules, AGENTS.md)');
+
+  let errors = 0;
+
+  // .cursorrules at repo root
+  if (!fs.existsSync(path.join(ROOT, '.cursorrules'))) {
+    fail('.cursorrules not found -- run: npm run sync');
+    errors++;
+  } else {
+    pass('.cursorrules exists');
+  }
+
+  // AGENTS.md at repo root
+  if (!fs.existsSync(path.join(ROOT, 'AGENTS.md'))) {
+    fail('AGENTS.md not found -- run: npm run sync');
+    errors++;
+  } else {
+    pass('AGENTS.md exists');
+  }
+
+  // .cursor/agents/ has exactly 4 .md files
+  const cursorAgentsDir = path.join(ROOT, '.cursor', 'agents');
+  if (!fs.existsSync(cursorAgentsDir)) {
+    fail('.cursor/agents/ not found -- run: npm run sync');
+    errors++;
+  } else {
+    const agentFiles = fs.readdirSync(cursorAgentsDir).filter(f => f.endsWith('.md'));
+    if (agentFiles.length !== 4) {
+      fail(`.cursor/agents/ has ${agentFiles.length} .md file(s); expected 4`);
+      errors++;
+    } else {
+      pass(`.cursor/agents/ has exactly 4 agent files`);
+    }
+  }
+
+  // .cursor/skills/ has exactly 7 subdirectories
+  const cursorSkillsDir = path.join(ROOT, '.cursor', 'skills');
+  if (!fs.existsSync(cursorSkillsDir)) {
+    fail('.cursor/skills/ not found -- run: npm run sync');
+    errors++;
+  } else {
+    const skillDirs = fs.readdirSync(cursorSkillsDir, { withFileTypes: true })
+      .filter(e => e.isDirectory());
+    if (skillDirs.length !== 7) {
+      fail(`.cursor/skills/ has ${skillDirs.length} director(ies); expected 7`);
+      errors++;
+    } else {
+      pass(`.cursor/skills/ has exactly 7 skill directories`);
+    }
+  }
+
+  if (errors === 0) pass('All harness structure checks passed');
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
-const checkMap = { md: checkMd, agents: checkAgents, skills: checkSkills, manifest: checkManifest, count: checkCount };
+const checkMap = { md: checkMd, agents: checkAgents, skills: checkSkills, manifest: checkManifest, count: checkCount, harness: checkHarness };
 for (const c of toRun) checkMap[c]();
 
 console.log(totalErrors === 0
