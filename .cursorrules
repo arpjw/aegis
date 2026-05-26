@@ -382,3 +382,47 @@ Before deploying to mainnet, the deployer must confirm all of the following, in 
 - [ ] Chainlink Sequencer Uptime Feed is configured if deployed on Arbitrum, Optimism, or Base.
 - [ ] The deployment transaction has been reviewed by a second engineer who did not write the deployment script.
 - [ ] A post-deployment verification script confirms all constructor and initialization parameters match the specification.
+
+---
+
+## Production Readiness Gate
+
+This gate is the single authoritative ship/no-ship decision point. Every item must be checked before deployment proceeds. A single unchecked item is a hard stop; deployment does not proceed until it is resolved.
+
+### 1. Security
+
+- [ ] `/aegis:audit` runs clean: zero P0 or P1 findings outstanding.
+- [ ] Slither produces no High or Critical findings against the final deployment bytecode.
+- [ ] Aderyn produces no High findings against the final deployment bytecode.
+- [ ] Mythril deep mode (`--execution-timeout 300`) produces no high-severity findings. Required for all contracts targeting TVL above $1M; strongly recommended below that threshold.
+
+### 2. Testing
+
+- [ ] `forge coverage --report lcov` reports minimum 90% line coverage for `src/`.
+- [ ] All fuzz tests run with at least 1024 iterations (set `fuzz_runs = 1024` in `foundry.toml` or per-test via `vm.assume` discipline; 256 is the floor for non-production branches only).
+- [ ] All invariant test suites are configured with at least 256 runs and depth 15 (`invariant_runs = 256`, `invariant_depth = 15` in `foundry.toml`).
+- [ ] Mainnet fork tests pass for every external protocol integration (Chainlink feed, Uniswap pool, lending protocol, or equivalent). Fork tests must run against a pinned block number.
+
+### 3. Gas
+
+- [ ] `/aegis:gas-snapshot` reports zero regressions against the committed `.gas-snapshot` baseline.
+- [ ] All gas optimizations applied in the production branch are documented in commit history with before/after measurements. Undocumented optimizations are not credited.
+
+### 4. Deployment Hygiene
+
+Full coverage for deployment safety is scheduled for the `deployment-safety` skill in v0.3.0. The items below are the minimum gate for all deployments.
+
+- [ ] Deployment owner is a multisig (Gnosis Safe or equivalent), not an EOA. EOA deployer keys must be rotated out of all privileged roles before the deployment transaction finalizes.
+- [ ] All privileged functions are governed by a timelock with a minimum 24-hour delay. Protocols targeting TVL above $10M require a minimum 48-hour delay.
+- [ ] All deployed contracts are verified on Etherscan (or the equivalent block explorer for the target chain) before the deployment is announced.
+- [ ] Emergency pause mechanism has been tested on a mainnet fork: invoke `pause()`, confirm all state-mutating user functions revert, invoke `unpause()`, confirm normal operation resumes.
+
+### 5. Operations
+
+- [ ] Monitoring is configured and alerts are live before deployment. Acceptable implementations: Forta detection bots scoped to the deployed contract addresses, Tenderly alerts on privileged function calls and large transfers, or a functionally equivalent custom alerting stack. "We will set this up after launch" does not satisfy this item.
+- [ ] An incident response runbook is documented and accessible to all on-call signers. The runbook must cover at minimum: how to invoke `pause()`, how to reach all multisig signers within 30 minutes, and the escalation path if a signer is unreachable.
+- [ ] All multisig signers are identified, their key custody arrangements are confirmed, and a test transaction has been signed and executed by the required threshold within the 72 hours preceding deployment.
+
+---
+
+**Ship/no-ship rule:** If any item above is unchecked at the time of the planned deployment window, the deployment is postponed. There are no exceptions and no waivers. Partial completion is not completion.
